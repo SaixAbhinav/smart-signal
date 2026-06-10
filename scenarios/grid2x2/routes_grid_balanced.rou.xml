@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes>
+    <vType id="car" accel="2.6" decel="4.5" length="5.0" minGap="2.5" maxSpeed="16.67" sigma="0.5"/>
+    <route id="weBot" edges="W00__J00 J00__J10 J10__E10"/>
+    <route id="ewBot" edges="E10__J10 J10__J00 J00__W00"/>
+    <route id="weTop" edges="W01__J01 J01__J11 J11__E11"/>
+    <route id="ewTop" edges="E11__J11 J11__J01 J01__W01"/>
+    <route id="snLeftCol" edges="S00__J00 J00__J01 J01__N01"/>
+    <route id="nsLeftCol" edges="N01__J01 J01__J00 J00__S00"/>
+    <route id="snRightCol" edges="S10__J10 J10__J11 J11__N11"/>
+    <route id="nsRightCol" edges="N11__J11 J11__J10 J10__S10"/>
+    <route id="turnWN" edges="W00__J00 J00__J01 J01__N01"/>
+    <route id="turnES" edges="E11__J11 J11__J10 J10__S10"/>
+    <route id="turnSE" edges="S00__J00 J00__J10 J10__E10"/>
+    <route id="turnNW" edges="N11__J11 J11__J01 J01__W01"/>
+    <flow id="weBot_0" route="weBot" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="weTop_0" route="weTop" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="ewBot_0" route="ewBot" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="ewTop_0" route="ewTop" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="snLeftCol_0" route="snLeftCol" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="nsLeftCol_0" route="nsLeftCol" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="snRightCol_0" route="snRightCol" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="nsRightCol_0" route="nsRightCol" begin="0" end="3600" vehsPerHour="250" type="car" departLane="best" departSpeed="max"/>
+    <flow id="turnWN_0" route="turnWN" begin="0" end="3600" vehsPerHour="70" type="car" departLane="best" departSpeed="max"/>
+    <flow id="turnES_0" route="turnES" begin="0" end="3600" vehsPerHour="70" type="car" departLane="best" departSpeed="max"/>
+    <flow id="turnSE_0" route="turnSE" begin="0" end="3600" vehsPerHour="70" type="car" departLane="best" departSpeed="max"/>
+    <flow id="turnNW_0" route="turnNW" begin="0" end="3600" vehsPerHour="70" type="car" departLane="best" departSpeed="max"/>
+</routes>

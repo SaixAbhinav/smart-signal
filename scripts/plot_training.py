@@ -16,11 +16,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from smartsignal.config import resolve
 
 RUNS = Path(resolve("runs"))
-OUT = Path(resolve("docs")) / "training_curve.png"
 
 
 def main() -> None:
     prefix = sys.argv[1] if len(sys.argv) > 1 else "ppo_single"
+    out = Path(resolve("docs")) / (
+        "training_curve.png" if prefix == "ppo_single" else f"training_curve_{prefix}.png"
+    )
     candidates = sorted(RUNS.glob(f"{prefix}*"), key=lambda p: p.stat().st_mtime)
     if not candidates:
         raise SystemExit(f"no runs matching {prefix}* under {RUNS}")
@@ -32,7 +34,7 @@ def main() -> None:
     steps = [e.step for e in events]
     vals = [e.value for e in events]
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(8, 4.5), facecolor="#0f1419")
     ax.set_facecolor("#1a2129")
     ax.plot(steps, vals, color="#4fc3f7", linewidth=2)
@@ -44,8 +46,8 @@ def main() -> None:
         spine.set_color("#2a3441")
     ax.grid(color="#2a3441", linewidth=0.5)
     fig.tight_layout()
-    fig.savefig(OUT, dpi=130)
-    print(f"wrote {OUT} ({len(events)} points, final reward {vals[-1]:.3f})")
+    fig.savefig(out, dpi=130)
+    print(f"wrote {out} ({len(events)} points, final reward {vals[-1]:.3f})")
 
 
 if __name__ == "__main__":

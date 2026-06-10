@@ -2,7 +2,8 @@
 
 Runs several SUMO simulations in lockstep — identical network, demand, and
 seed, but different signal controllers — and streams their state to the
-browser over a WebSocket.
+browser over a WebSocket. Supports both the single intersection and the
+2x2 grid scenario (every junction controlled by the same shared policy).
 
 Run with:  uvicorn dashboard.server:app  (from the project root)
 """
@@ -15,78 +16,120 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from smartsignal.config import load_config, load_demand_profiles, resolve
-from smartsignal.controllers import CONTROLLERS
-from smartsignal.demand.generate_routes import route_file_for
+from smartsignal.demand import generate_grid_routes, generate_routes
+from smartsignal.env.multi_signal import SignalNetwork
 from smartsignal.env.sumo_utils import build_sumo_cmd, close_sumo, start_sumo
-from smartsignal.env.traffic_signal import TrafficSignal
+from smartsignal.evaluation.run_eval import make_controller_factory
 from smartsignal.evaluation.runner import apply_decision
 
 STATIC_DIR = Path(__file__).parent / "static"
 CFG = load_config()
 ENV_CFG = CFG["env"]
-MODEL_PATH = Path(resolve(CFG["paths"]["models_dir"])) / "ppo_single.zip"
+
+SCENARIOS = {
+    "single": {
+        "net_file": ENV_CFG["net_file"],
+        "profiles": lambda: list(load_demand_profiles()),
+        "route_file_for": generate_routes.route_file_for,
+        "model": "models/ppo_single.zip",
+    },
+    "grid2x2": {
+        "net_file": CFG["grid"]["net_file"],
+        "profiles": lambda: list(generate_grid_routes.load_grid_profiles()),
+        "route_file_for": generate_grid_routes.route_file_for,
+        "model": "models/ppo_grid.zip",
+    },
+}
 
 app = FastAPI(title="SmartSignal")
 
 
 class SimInstance:
-    """One controller's simulation plus its live metrics."""
+    """One controller's simulation (any number of junctions) plus live metrics."""
 
-    def __init__(self, name: str, profile: str, seed: int):
+    def __init__(self, name: str, scenario: str, profile: str, seed: int):
         self.name = name
-        kwargs = {
-            "green_duration": CFG["fixed_time"]["green_duration"],
-            "max_green": ENV_CFG["max_green"],
-        }
-        if name == "rl":
-            kwargs["model_path"] = str(MODEL_PATH)
-        self.controller = CONTROLLERS[name](**kwargs)
+        scen = SCENARIOS[scenario]
+        factory = make_controller_factory(name, CFG, scen["model"])
 
         cmd = build_sumo_cmd(
-            resolve(ENV_CFG["net_file"]), route_file_for(profile), seed=seed
+            resolve(scen["net_file"]), scen["route_file_for"](profile), seed=seed
         )
         self.conn = start_sumo(cmd, use_libsumo=False)
-        self.ts_id = self.conn.trafficlight.getIDList()[0]
-        if self.controller.uses_builtin_program:
-            self.ts = None
-            lanes = self.conn.trafficlight.getControlledLanes(self.ts_id)
-            self.in_lanes = list(dict.fromkeys(lanes))
+
+        probe = factory()
+        if probe.uses_builtin_program:
+            self.network = None
+            self.controllers = {}
+            tls_ids = list(self.conn.trafficlight.getIDList())
+            self.tls_lanes = {
+                t: list(dict.fromkeys(self.conn.trafficlight.getControlledLanes(t)))
+                for t in tls_ids
+            }
         else:
-            self.ts = TrafficSignal(
-                self.conn, self.ts_id, ENV_CFG["yellow_time"], ENV_CFG["min_green"]
+            self.network = SignalNetwork(
+                self.conn, ENV_CFG["yellow_time"], ENV_CFG["min_green"],
+                ENV_CFG["max_green"],
             )
-            self.in_lanes = self.ts.in_lanes
-        self.controller.reset(self.ts)
+            self.controllers = {}
+            for i, t in enumerate(self.network.ids):
+                c = probe if i == 0 else factory()
+                c.reset(
+                    self.network.signals[t],
+                    obs_fn=(lambda tid=t: self.network.observe(tid)),
+                )
+                self.controllers[t] = c
+            self.tls_lanes = {
+                t: self.network.signals[t].in_lanes for t in self.network.ids
+            }
 
-        # lane -> indices into the signal state string (for rendering colors)
-        self.lane_sig: dict[str, list[int]] = {l: [] for l in self.in_lanes}
-        for i, link in enumerate(self.conn.trafficlight.getControlledLinks(self.ts_id)):
-            if link:
-                self.lane_sig[link[0][0]].append(i)
+        # lane -> indices into its TLS state string, for rendering signal colors
+        self.lane_sig: dict[str, tuple[str, list[int]]] = {}
+        for t, lanes in self.tls_lanes.items():
+            idxs: dict[str, list[int]] = {l: [] for l in lanes}
+            for i, link in enumerate(self.conn.trafficlight.getControlledLinks(t)):
+                if link:
+                    idxs[link[0][0]].append(i)
+            for l, sig in idxs.items():
+                self.lane_sig[l] = (t, sig)
 
+        self.in_lanes = [l for lanes in self.tls_lanes.values() for l in lanes]
         self.time = 0
         self.arrived = 0
         self.cum_wait = 0.0  # vehicle-seconds spent halted
 
+    def node_positions(self) -> dict[str, list[float]]:
+        """Coordinates for the grid renderer (edge ids follow 'A__B' naming)."""
+        nodes = set()
+        for lane in self.in_lanes:
+            edge = lane.rsplit("_", 1)[0]
+            if "__" in edge:
+                nodes.update(edge.split("__"))
+        return {
+            n: list(self.conn.junction.getPosition(n)) for n in sorted(nodes)
+        }
+
     def step_second(self) -> None:
-        if self.ts is not None and self.time % ENV_CFG["delta_time"] == 0:
-            apply_decision(
-                self.ts,
-                self.controller.decide(self.ts, self.time),
-                ENV_CFG["max_green"],
-            )
+        if self.network is not None and self.time % ENV_CFG["delta_time"] == 0:
+            for t, c in self.controllers.items():
+                ts = self.network.signals[t]
+                apply_decision(ts, c.decide(ts, self.time), ENV_CFG["max_green"])
         self.conn.simulationStep()
-        if self.ts is not None:
-            self.ts.tick(1.0)
+        if self.network is not None:
+            self.network.tick(1.0)
         self.time += 1
         self.arrived += self.conn.simulation.getArrivedNumber()
 
     def frame(self) -> dict:
-        state = self.conn.trafficlight.getRedYellowGreenState(self.ts_id)
+        states = {
+            t: self.conn.trafficlight.getRedYellowGreenState(t)
+            for t in self.tls_lanes
+        }
         rank = {"G": 3, "g": 2, "y": 1}
         colors, queues = {}, {}
         queued_now = 0
-        for lane, sig_idxs in self.lane_sig.items():
+        for lane, (t, sig_idxs) in self.lane_sig.items():
+            state = states[t]
             best = max((state[i] for i in sig_idxs), key=lambda c: rank.get(c, 0), default="r")
             colors[lane] = "green" if best in "Gg" else "yellow" if best == "y" else "red"
             q = self.conn.lane.getLastStepHaltingNumber(lane)
@@ -114,13 +157,15 @@ async def index():
 
 @app.get("/api/config")
 async def config():
-    return {
-        "profiles": list(load_demand_profiles()),
-        "controllers": ["fixed", "actuated", "maxpressure"]
-        + (["rl"] if MODEL_PATH.exists() else []),
-        "rl_available": MODEL_PATH.exists(),
-        "episode_seconds": ENV_CFG["episode_seconds"],
-    }
+    out = {"scenarios": {}, "episode_seconds": ENV_CFG["episode_seconds"]}
+    for name, scen in SCENARIOS.items():
+        rl_ok = Path(resolve(scen["model"])).exists()
+        out["scenarios"][name] = {
+            "profiles": scen["profiles"](),
+            "controllers": ["fixed", "actuated", "maxpressure"] + (["rl"] if rl_ok else []),
+            "rl_available": rl_ok,
+        }
+    return out
 
 
 @app.websocket("/ws")
@@ -134,7 +179,6 @@ async def ws_endpoint(ws: WebSocket):
             if not running:
                 msg = await ws.receive_json()
             else:
-                # poll for control messages without blocking the sim loop
                 try:
                     msg = await asyncio.wait_for(ws.receive_json(), timeout=0.001)
                 except asyncio.TimeoutError:
@@ -145,8 +189,9 @@ async def ws_endpoint(ws: WebSocket):
                 if cmd == "start":
                     for s in sims:
                         s.close()
+                    scenario = msg.get("scenario", "single")
                     sims = [
-                        SimInstance(name, msg["profile"], int(msg.get("seed", 0)))
+                        SimInstance(name, scenario, msg["profile"], int(msg.get("seed", 0)))
                         for name in msg["controllers"]
                     ]
                     speed = float(msg.get("speed", 10))
@@ -154,8 +199,10 @@ async def ws_endpoint(ws: WebSocket):
                     await ws.send_json(
                         {
                             "type": "init",
+                            "scenario": scenario,
                             "controllers": [s.name for s in sims],
                             "lanes": sims[0].in_lanes,
+                            "nodes": sims[0].node_positions(),
                         }
                     )
                 elif cmd == "speed":

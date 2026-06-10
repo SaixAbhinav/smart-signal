@@ -48,6 +48,17 @@ uvicorn dashboard.server:app
 # -> http://127.0.0.1:8000
 ```
 
+The 2×2 grid (multi-intersection coordination) works the same way:
+
+```bash
+python scripts/build_grid.py                       # network
+python -m smartsignal.demand.generate_grid_routes  # demand
+python -m smartsignal.training.train_grid_ppo      # shared policy (~10 min)
+python -m smartsignal.evaluation.run_eval --scenario grid2x2 \
+    --controllers fixed actuated maxpressure rl
+# then pick "grid2x2" in the dashboard's scenario dropdown
+```
+
 Watch any controller in SUMO's own GUI:
 
 ```bash
@@ -73,19 +84,37 @@ posts the highest throughput and lowest CO₂ on that profile.
 
 *(regenerate with `python -m smartsignal.evaluation.report results/baselines.csv results/rl.csv`)*
 
+### Multi-intersection (2×2 grid)
+
+Four junctions, one shared PPO policy with neighbor-aware observations.
+Mean over 5 seeds, 1-hour episodes:
+
+| Controller | wait (corridor demand) | wait (balanced) | corridor travel time | stops/vehicle |
+|---|---|---|---|---|
+| Fixed timer | 85.3 ± 0.3 s | 74.9 ± 1.0 s | 163.5 s | 1.4 |
+| Actuated (SUMO) | 16.9 ± 0.3 s | 15.6 ± 0.3 s | 81.0 s | 1.5 |
+| Max-pressure | 9.5 ± 0.5 s | 8.9 ± 0.2 s | 68.9 s | 1.0 |
+| **PPO shared policy** | **7.4 ± 0.0 s** | **5.8 ± 0.1 s** | **66.7 s** | **1.0** |
+
+The shared policy beats every baseline on the grid — **22–35% less waiting
+than max-pressure** — and produces the emergent green-wave effect: corridor
+vehicles cross both junctions with ~1 stop and the lowest end-to-end travel
+time, without any hand-coded offset coordination.
+
 ![training curve](docs/training_curve.png)
 
 ## Project layout
 
 ```
-scenarios/single/      SUMO network (+ generated route files)
-smartsignal/env/       Gymnasium env, TrafficSignal safety wrapper, obs/reward
+scenarios/             SUMO networks: single intersection + 2x2 grid
+smartsignal/env/       Gymnasium env, TrafficSignal safety wrapper, obs/reward,
+                       SignalNetwork (neighbor-aware obs), multi-junction VecEnv
 smartsignal/controllers/  fixed, actuated, max-pressure, RL — one interface
 smartsignal/demand/    demand profiles -> deterministic .rou.xml
-smartsignal/training/  SB3 PPO with parallel libsumo workers
-smartsignal/evaluation/  tripinfo-based benchmark harness -> CSV
+smartsignal/training/  SB3 PPO: parallel workers (single) / shared policy (grid)
+smartsignal/evaluation/  tripinfo-based benchmark harness -> CSV (+ green-wave metrics)
 dashboard/             FastAPI + WebSocket lockstep comparison UI
-tests/                 env contract, safety constraints, determinism
+tests/                 env contract, safety constraints, determinism, grid
 ```
 
 ## Tech
@@ -95,6 +124,6 @@ FastAPI + WebSockets · Chart.js
 
 ## Roadmap
 
-- 2×2 grid with a shared policy per junction and measured green-wave effect
 - RESCO real-city scenario import
 - Demand calibration from TomTom historical traffic stats
+- Larger grids (the shared-policy VecEnv scales to any junction count)

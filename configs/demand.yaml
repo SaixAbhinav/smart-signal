@@ -21,3 +21,47 @@ profiles:
       - {begin: 900,  end: 1800, rates: {N: 550, S: 500, E: 250, W: 250}}
       - {begin: 1800, end: 2700, rates: {N: 350, S: 350, E: 500, W: 450}}
       - {begin: 2700, end: 3600, rates: {N: 200, S: 200, E: 200, W: 200}}
+
+# 2x2 grid profiles. Rates are vehicles/hour per named route (see
+# smartsignal/demand/generate_grid_routes.py for the route definitions).
+# weBot/ewBot/weTop/ewTop are the east-west corridor routes used for the
+# green-wave metric.
+grid_profiles:
+  grid_corridor:
+    # Heavy west->east commuter corridor on both rows, light cross traffic.
+    intervals:
+      - begin: 0
+        end: 3600
+        rates:
+          weBot: 450
+          weTop: 450
+          ewBot: 300
+          ewTop: 300
+          snLeftCol: 120
+          nsLeftCol: 120
+          snRightCol: 120
+          nsRightCol: 120
+          turnWN: 60
+          turnES: 60
+          turnSE: 60
+          turnNW: 60
+
+  grid_balanced:
+    # Comparable load in all directions; tests that coordination does not
+    # overfit to one corridor.
+    intervals:
+      - begin: 0
+        end: 3600
+        rates:
+          weBot: 250
+          weTop: 250
+          ewBot: 250
+          ewTop: 250
+          snLeftCol: 250
+          nsLeftCol: 250
+          snRightCol: 250
+          nsRightCol: 250
+          turnWN: 70
+          turnES: 70
+          turnSE: 70
+          turnNW: 70

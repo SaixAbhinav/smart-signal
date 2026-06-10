@@ -12,8 +12,13 @@ class Controller:
     name = "base"
     uses_builtin_program = False
 
-    def reset(self, ts: TrafficSignal | None) -> None:
-        """Called once at episode start. ts is None for builtin-program controllers."""
+    def reset(self, ts: TrafficSignal | None, obs_fn=None) -> None:
+        """Called once at episode start, once per controlled junction.
+
+        ts is None for builtin-program controllers. obs_fn, when given, returns
+        the observation vector for this junction (used by the RL controller so
+        it sees exactly what it saw in training, incl. neighbor features).
+        """
 
     def decide(self, ts: TrafficSignal, sim_time: float) -> int:
         """Return the desired green phase index for this decision interval."""

@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 runs/
 models/checkpoints/
+models/*_smoke.zip
 models/ppo_smoke.zip
 *.egg-info/
 .venv/

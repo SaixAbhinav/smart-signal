@@ -8,18 +8,24 @@ from smartsignal.env.traffic_signal import TrafficSignal
 class RLController(Controller):
     name = "rl"
 
-    def __init__(self, model_path: str, max_green: int = 60, **_):
-        from stable_baselines3 import PPO  # deferred: heavy import
+    def __init__(self, model_path: str = "", max_green: int = 60, model=None, **_):
+        if model is None:
+            from stable_baselines3 import PPO  # deferred: heavy import
 
-        self.model = PPO.load(model_path, device="cpu")
+            model = PPO.load(model_path, device="cpu")
+        self.model = model
         self.max_green = max_green
-        self.obs_builder: ObservationBuilder | None = None
+        self._obs_fn = None
 
-    def reset(self, ts: TrafficSignal | None) -> None:
-        self.obs_builder = ObservationBuilder(ts, self.max_green)
+    def reset(self, ts: TrafficSignal | None, obs_fn=None) -> None:
+        if obs_fn is not None:
+            self._obs_fn = obs_fn
+        else:
+            builder = ObservationBuilder(ts, self.max_green)
+            self._obs_fn = builder.build
 
     def decide(self, ts: TrafficSignal, sim_time: float) -> int:
-        obs = self.obs_builder.build()
+        obs = self._obs_fn()
         action, _ = self.model.predict(obs, deterministic=True)
         action = int(action)
         # mirror the env's max-green rotation so behavior matches training

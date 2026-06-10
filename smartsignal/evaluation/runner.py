@@ -1,7 +1,14 @@
-"""Run one evaluation episode for any controller behind the common interface."""
+"""Run one evaluation episode for any controller on any scenario.
+
+Works for a single intersection or a whole grid: every traffic light in the
+network gets its own controller instance from `controller_factory` (so an RL
+factory can share one loaded policy across junctions — parameter sharing at
+deployment, matching how the policy was trained).
+"""
 
 import os
 import tempfile
+from typing import Callable
 
 from smartsignal.controllers.base import Controller
 from smartsignal.env.sumo_utils import build_sumo_cmd, close_sumo, start_sumo
@@ -18,7 +25,7 @@ def apply_decision(ts: TrafficSignal, desired: int, max_green: int) -> None:
 
 
 def run_episode(
-    controller: Controller,
+    controller_factory: Callable[[], Controller],
     net_file: str,
     route_file: str,
     seed: int,
@@ -30,7 +37,10 @@ def run_episode(
     max_green: int = 60,
     use_libsumo: bool = True,
     gui: bool = False,
+    corridor_routes: tuple[str, ...] | None = None,
 ) -> EpisodeMetrics:
+    from smartsignal.env.multi_signal import SignalNetwork  # avoid import cycle
+
     fd, tripinfo_path = tempfile.mkstemp(suffix=".xml", prefix="tripinfo_")
     os.close(fd)
     cmd = build_sumo_cmd(
@@ -39,24 +49,37 @@ def run_episode(
     )
     conn = start_sumo(cmd, use_libsumo=use_libsumo)
     try:
-        ts_id = conn.trafficlight.getIDList()[0]
-        if controller.uses_builtin_program:
-            ts = None
-            in_lanes = list(dict.fromkeys(conn.trafficlight.getControlledLanes(ts_id)))
+        probe = controller_factory()
+        if probe.uses_builtin_program:
+            network = None
+            controllers: dict[str, Controller] = {}
+            in_lanes = []
+            for ts_id in conn.trafficlight.getIDList():
+                lanes = conn.trafficlight.getControlledLanes(ts_id)
+                in_lanes.extend(dict.fromkeys(lanes))
         else:
-            ts = TrafficSignal(conn, ts_id, yellow_time, min_green)
-            in_lanes = ts.in_lanes
-        controller.reset(ts)
+            network = SignalNetwork(conn, yellow_time, min_green, max_green)
+            controllers = {}
+            for i, ts_id in enumerate(network.ids):
+                c = probe if i == 0 else controller_factory()
+                c.reset(
+                    network.signals[ts_id],
+                    obs_fn=(lambda t=ts_id: network.observe(t)),
+                )
+                controllers[ts_id] = c
+            in_lanes = [l for t in network.ids for l in network.signals[t].in_lanes]
 
         queue_samples = []
         t = 0
         while t < duration:
-            if ts is not None:
-                apply_decision(ts, controller.decide(ts, t), max_green)
+            if network is not None:
+                for ts_id, c in controllers.items():
+                    ts = network.signals[ts_id]
+                    apply_decision(ts, c.decide(ts, t), max_green)
             for _ in range(delta_time):
                 conn.simulationStep()
-                if ts is not None:
-                    ts.tick(1.0)
+                if network is not None:
+                    network.tick(1.0)
             t += delta_time
             queue_samples.append(
                 sum(conn.lane.getLastStepHaltingNumber(l) for l in in_lanes)
@@ -65,10 +88,10 @@ def run_episode(
     finally:
         close_sumo(conn)  # flushes tripinfo output
 
-    trip = parse_tripinfo(tripinfo_path)
+    trip = parse_tripinfo(tripinfo_path, corridor_routes=corridor_routes)
     os.unlink(tripinfo_path)
     return EpisodeMetrics(
-        controller=controller.name,
+        controller=probe.name,
         profile=profile,
         seed=seed,
         arrived=trip["arrived"],
@@ -78,4 +101,8 @@ def run_episode(
         mean_timeloss_s=trip["mean_timeloss_s"],
         total_co2_kg=trip["total_co2_kg"],
         mean_queue=sum(queue_samples) / max(len(queue_samples), 1),
+        corridor_arrived=trip["corridor_arrived"],
+        corridor_travel_s=trip["corridor_travel_s"],
+        corridor_wait_s=trip["corridor_wait_s"],
+        corridor_stops=trip["corridor_stops"],
     )

@@ -33,10 +33,10 @@ def main() -> None:
     }
     if args.controller == "rl":
         kwargs["model_path"] = resolve(args.model)
-    controller = CONTROLLERS[args.controller](**kwargs)
+    factory = lambda: CONTROLLERS[args.controller](**kwargs)
 
     metrics = run_episode(
-        controller,
+        factory,
         resolve(env_cfg["net_file"]),
         route_file_for(args.profile),
         seed=args.seed,
