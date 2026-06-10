@@ -1,0 +1,29 @@
+# SmartSignal default configuration
+env:
+  net_file: scenarios/single/single.net.xml
+  delta_time: 5        # seconds between agent decisions
+  yellow_time: 3       # fixed yellow duration on phase change
+  min_green: 10        # phase cannot be abandoned before this
+  max_green: 60        # phase is force-rotated after this
+  episode_seconds: 3600
+  reward: diff_waiting # diff_waiting | pressure
+
+fixed_time:
+  green_duration: 30   # per-phase green for the fixed-timer baseline
+
+ppo:
+  total_timesteps: 500000
+  n_envs: 8
+  n_steps: 512
+  batch_size: 256
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  ent_coef: 0.01
+  clip_range: 0.2
+  net_arch: [128, 128]
+
+paths:
+  models_dir: models
+  runs_dir: runs
+  results_dir: results

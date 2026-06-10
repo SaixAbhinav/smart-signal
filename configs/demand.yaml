@@ -1,0 +1,23 @@
+# Demand profiles for the single intersection.
+# Rates are vehicles/hour entering per approach; turn fractions apply per approach.
+# "intervals" lets a profile vary over time (begin/end in seconds).
+profiles:
+  offpeak:
+    turns: {left: 0.15, straight: 0.65, right: 0.20}
+    intervals:
+      - {begin: 0, end: 3600, rates: {N: 220, S: 220, E: 220, W: 220}}
+
+  rush_ns:
+    # Heavy, asymmetric north-south commuter flow vs light east-west.
+    turns: {left: 0.15, straight: 0.65, right: 0.20}
+    intervals:
+      - {begin: 0, end: 3600, rates: {N: 620, S: 540, E: 180, W: 180}}
+
+  variable:
+    # Off-peak -> ramp into a peak -> back down. The case where fixed timing hurts most.
+    turns: {left: 0.15, straight: 0.65, right: 0.20}
+    intervals:
+      - {begin: 0,    end: 900,  rates: {N: 200, S: 200, E: 200, W: 200}}
+      - {begin: 900,  end: 1800, rates: {N: 550, S: 500, E: 250, W: 250}}
+      - {begin: 1800, end: 2700, rates: {N: 350, S: 350, E: 500, W: 450}}
+      - {begin: 2700, end: 3600, rates: {N: 200, S: 200, E: 200, W: 200}}

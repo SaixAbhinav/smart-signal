@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes>
+    <vType id="car" accel="2.6" decel="4.5" length="5.0" minGap="2.5" maxSpeed="16.67" sigma="0.5"/>
+    <route id="N_straight" edges="N_in S_out"/>
+    <route id="N_left" edges="N_in E_out"/>
+    <route id="N_right" edges="N_in W_out"/>
+    <route id="S_straight" edges="S_in N_out"/>
+    <route id="S_left" edges="S_in W_out"/>
+    <route id="S_right" edges="S_in E_out"/>
+    <route id="E_straight" edges="E_in W_out"/>
+    <route id="E_left" edges="E_in S_out"/>
+    <route id="E_right" edges="E_in N_out"/>
+    <route id="W_straight" edges="W_in E_out"/>
+    <route id="W_left" edges="W_in N_out"/>
+    <route id="W_right" edges="W_in S_out"/>
+    <flow id="f0" route="N_left" begin="0" end="900" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f1" route="N_straight" begin="0" end="900" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f2" route="N_right" begin="0" end="900" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f3" route="S_left" begin="0" end="900" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f4" route="S_straight" begin="0" end="900" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f5" route="S_right" begin="0" end="900" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f6" route="E_left" begin="0" end="900" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f7" route="E_straight" begin="0" end="900" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f8" route="E_right" begin="0" end="900" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f9" route="W_left" begin="0" end="900" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f10" route="W_straight" begin="0" end="900" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f11" route="W_right" begin="0" end="900" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f12" route="N_left" begin="900" end="1800" vehsPerHour="82.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f13" route="N_straight" begin="900" end="1800" vehsPerHour="357.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f14" route="N_right" begin="900" end="1800" vehsPerHour="110.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f15" route="S_left" begin="900" end="1800" vehsPerHour="75.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f16" route="S_straight" begin="900" end="1800" vehsPerHour="325.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f17" route="S_right" begin="900" end="1800" vehsPerHour="100.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f18" route="E_left" begin="900" end="1800" vehsPerHour="37.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f19" route="E_straight" begin="900" end="1800" vehsPerHour="162.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f20" route="E_right" begin="900" end="1800" vehsPerHour="50.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f21" route="W_left" begin="900" end="1800" vehsPerHour="37.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f22" route="W_straight" begin="900" end="1800" vehsPerHour="162.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f23" route="W_right" begin="900" end="1800" vehsPerHour="50.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f24" route="N_left" begin="1800" end="2700" vehsPerHour="52.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f25" route="N_straight" begin="1800" end="2700" vehsPerHour="227.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f26" route="N_right" begin="1800" end="2700" vehsPerHour="70.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f27" route="S_left" begin="1800" end="2700" vehsPerHour="52.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f28" route="S_straight" begin="1800" end="2700" vehsPerHour="227.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f29" route="S_right" begin="1800" end="2700" vehsPerHour="70.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f30" route="E_left" begin="1800" end="2700" vehsPerHour="75.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f31" route="E_straight" begin="1800" end="2700" vehsPerHour="325.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f32" route="E_right" begin="1800" end="2700" vehsPerHour="100.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f33" route="W_left" begin="1800" end="2700" vehsPerHour="67.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f34" route="W_straight" begin="1800" end="2700" vehsPerHour="292.50" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f35" route="W_right" begin="1800" end="2700" vehsPerHour="90.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f36" route="N_left" begin="2700" end="3600" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f37" route="N_straight" begin="2700" end="3600" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f38" route="N_right" begin="2700" end="3600" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f39" route="S_left" begin="2700" end="3600" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f40" route="S_straight" begin="2700" end="3600" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f41" route="S_right" begin="2700" end="3600" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f42" route="E_left" begin="2700" end="3600" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f43" route="E_straight" begin="2700" end="3600" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f44" route="E_right" begin="2700" end="3600" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f45" route="W_left" begin="2700" end="3600" vehsPerHour="30.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f46" route="W_straight" begin="2700" end="3600" vehsPerHour="130.00" type="car" departLane="best" departSpeed="max"/>
+    <flow id="f47" route="W_right" begin="2700" end="3600" vehsPerHour="40.00" type="car" departLane="best" departSpeed="max"/>
+</routes>
