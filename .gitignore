@@ -1,9 +1,33 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Training artifacts (checked-in models are the curated finals only)
 runs/
 models/checkpoints/
 models/*_smoke.zip
-models/ppo_smoke.zip
-*.egg-info/
-.venv/
+
+# SUMO runtime leftovers
+*.sumocfg.bak
+tripinfo*.xml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+
+# Local env files
+.env
+.env.local
