@@ -2,9 +2,11 @@
 // Two renderers: a hand-drawn single-intersection view, and a generic vector
 // view for grid scenarios whose edge ids follow the "A__B" naming convention.
 
-const COLORS = { fixed: "#e57373", actuated: "#ffb74d", maxpressure: "#64b5f6", rl: "#81c784" };
+const COLORS = { fixed: "#e89aa4", actuated: "#f0bd8d", maxpressure: "#94b4e4", rl: "#8fd4ae" };
 const LABELS = { fixed: "Fixed timer", actuated: "Actuated (SUMO)", maxpressure: "Max-pressure", rl: "PPO agent (RL)" };
-const SIGNAL = { green: "#2ecc71", yellow: "#f1c40f", red: "#e74c3c" };
+const SIGNAL = { green: "#34b27d", yellow: "#e6ac2f", red: "#e06c66" };
+const INK = "#38324a", INK_SOFT = "#7b748f", GRID_LINE = "#ece9f4";
+const ROAD = "#e7e4f0", JUNCTION = "#dcd7ea", LANE_LINE = "#d2cce2", QUEUE = "rgba(224, 108, 102, 0.75)";
 
 // --- single intersection geometry (320x320 canvas, right-hand traffic) -------
 const C = 160, HALF = 42, LW = 14, BOX = [C - HALF, C + HALF];
@@ -19,12 +21,12 @@ function laneRect(dir, idx) {
 
 function drawIntersection(ctx, lanes, colors, queues) {
   ctx.clearRect(0, 0, 320, 320);
-  ctx.fillStyle = "#2b2f33";
+  ctx.fillStyle = ROAD;
   ctx.fillRect(BOX[0], 0, HALF * 2, 320);
   ctx.fillRect(0, BOX[0], 320, HALF * 2);
-  ctx.fillStyle = "#3a3f44";
+  ctx.fillStyle = JUNCTION;
   ctx.fillRect(BOX[0], BOX[0], HALF * 2, HALF * 2);
-  ctx.strokeStyle = "#555c44";
+  ctx.strokeStyle = LANE_LINE;
   ctx.beginPath();
   ctx.moveTo(C, 0); ctx.lineTo(C, BOX[0]); ctx.moveTo(C, BOX[1]); ctx.lineTo(C, 320);
   ctx.moveTo(0, C); ctx.lineTo(BOX[0], C); ctx.moveTo(BOX[1], C); ctx.lineTo(320, C);
@@ -34,21 +36,21 @@ function drawIntersection(ctx, lanes, colors, queues) {
     const [dir, , idxStr] = lane.split("_");
     const idx = +idxStr;
     const r = laneRect(dir, idx);
-    ctx.strokeStyle = "#1f2428";
+    ctx.strokeStyle = LANE_LINE;
     ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
     const q = Math.min(queues[lane] || 0, 22);
     if (q > 0) {
-      ctx.fillStyle = "rgba(231, 76, 60, 0.75)";
+      ctx.fillStyle = QUEUE;
       const len = q * 5;
       if (r.vert) ctx.fillRect(r.x + 2, r.dq < 0 ? r.stop - len : r.stop, r.w - 4, len);
       else ctx.fillRect(r.dq < 0 ? r.stop - len : r.stop, r.y + 2, len, r.h - 4);
     }
-    ctx.fillStyle = SIGNAL[colors[lane]] || "#555";
+    ctx.fillStyle = SIGNAL[colors[lane]] || INK_SOFT;
     if (r.vert) ctx.fillRect(r.x + 2, r.dq < 0 ? r.stop - 5 : r.stop + 1, r.w - 4, 4);
     else ctx.fillRect(r.dq < 0 ? r.stop - 5 : r.stop + 1, r.y + 2, 4, r.h - 4);
   }
-  ctx.fillStyle = "#8b98a5";
-  ctx.font = "11px sans-serif";
+  ctx.fillStyle = INK_SOFT;
+  ctx.font = "11px Outfit, sans-serif";
   ctx.fillText("N", 154, 12); ctx.fillText("S", 154, 314);
   ctx.fillText("W", 6, 164); ctx.fillText("E", 306, 164);
 }
@@ -104,12 +106,12 @@ function buildGridGeometry(lanes, nodes, W = 320, H = 320, pad = 20) {
 
 function drawGrid(ctx, geo, colors, queues) {
   ctx.clearRect(0, 0, 320, 320);
-  ctx.strokeStyle = "#2b2f33";
+  ctx.strokeStyle = ROAD;
   ctx.lineWidth = geo.roadWidth;
   for (const [p1, p2] of geo.segs) {
     ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
   }
-  ctx.fillStyle = "#3a3f44";
+  ctx.fillStyle = JUNCTION;
   for (const j of geo.junctions) {
     const r = geo.roadWidth / 2 + 1;
     ctx.fillRect(j.p[0] - r, j.p[1] - r, 2 * r, 2 * r);
@@ -118,20 +120,20 @@ function drawGrid(ctx, geo, colors, queues) {
     const q = Math.min(queues[lane] || 0, 25);
     if (q > 0) {
       const len = Math.min(q * 3, g.maxLen);
-      ctx.strokeStyle = "rgba(231, 76, 60, 0.8)";
+      ctx.strokeStyle = QUEUE;
       ctx.lineWidth = geo.lw - 1;
       ctx.beginPath();
       ctx.moveTo(g.stop[0], g.stop[1]);
       ctx.lineTo(g.stop[0] + g.back[0] * len, g.stop[1] + g.back[1] * len);
       ctx.stroke();
     }
-    ctx.fillStyle = SIGNAL[colors[lane]] || "#555";
+    ctx.fillStyle = SIGNAL[colors[lane]] || INK_SOFT;
     ctx.beginPath();
     ctx.arc(g.stop[0], g.stop[1], 2.2, 0, 2 * Math.PI);
     ctx.fill();
   }
-  ctx.fillStyle = "#8b98a5";
-  ctx.font = "10px sans-serif";
+  ctx.fillStyle = INK_SOFT;
+  ctx.font = "10px Outfit, sans-serif";
   for (const j of geo.junctions) ctx.fillText(j.id, j.p[0] - 9, j.p[1] + 3);
 }
 
@@ -160,8 +162,17 @@ function applyScenario() {
   }
   if (!scen.rl_available) {
     ctrls.insertAdjacentHTML("beforeend",
-      `<label style="color:#666">(train a model to enable RL)</label>`);
+      `<label style="color:var(--ink-soft)">(train a model to enable RL)</label>`);
   }
+}
+
+function highlightChartLine(name) {
+  if (!chart) return;
+  chart.data.datasets.forEach(ds => {
+    const dsName = Object.keys(LABELS).find(k => LABELS[k] === ds.label);
+    ds.borderWidth = name === null ? 2.5 : (dsName === name ? 4 : 1.5);
+  });
+  chart.update("none");
 }
 
 function buildPanels(names) {
@@ -172,19 +183,34 @@ function buildPanels(names) {
     const div = document.createElement("div");
     div.className = "sim-panel";
     div.innerHTML = `
-      <h3 style="color:${COLORS[name]}">${LABELS[name]}</h3>
+      <h3><span class="dot" style="background:${COLORS[name]}"></span>${LABELS[name]}</h3>
       <canvas width="320" height="320"></canvas>
       <div class="stats">
         <span>queued<b class="q">0</b></span>
         <span>throughput<b class="a">0</b></span>
-        <span>total wait<b class="w">0s</b></span>
+        <span>total wait<b class="w">0</b></span>
       </div>`;
+    div.onmouseenter = () => highlightChartLine(name);
+    div.onmouseleave = () => highlightChartLine(null);
     grid.appendChild(div);
     panels[name] = {
       ctx: div.querySelector("canvas").getContext("2d"),
       q: div.querySelector(".q"), a: div.querySelector(".a"), w: div.querySelector(".w"),
     };
   }
+
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  for (const name of names) {
+    board.insertAdjacentHTML("beforeend", `
+      <div class="board-chip" data-name="${name}">
+        <span class="swatch" style="background:${COLORS[name]}"></span>
+        <b>${LABELS[name]}</b>
+        <span class="val mono">0 veh·min</span>
+        <span class="tag" hidden>least waiting</span>
+      </div>`);
+  }
+
   if (chart) chart.destroy();
   chart = new Chart(document.getElementById("chart"), {
     type: "line",
@@ -192,17 +218,32 @@ function buildPanels(names) {
       labels: [],
       datasets: names.map(n => ({
         label: LABELS[n], data: [], borderColor: COLORS[n],
-        pointRadius: 0, borderWidth: 2, tension: 0.3,
+        pointRadius: 0, borderWidth: 2.5, tension: 0.3,
       })),
     },
     options: {
       animation: false, responsive: true, maintainAspectRatio: false,
       scales: {
-        x: { title: { display: true, text: "simulation time (s)", color: "#8b98a5" }, ticks: { color: "#8b98a5", maxTicksLimit: 12 }, grid: { color: "#2a3441" } },
-        y: { title: { display: true, text: "cumulative waiting (vehicle-seconds)", color: "#8b98a5" }, ticks: { color: "#8b98a5" }, grid: { color: "#2a3441" } },
+        x: { title: { display: true, text: "simulation time (s)", color: INK_SOFT }, ticks: { color: INK_SOFT, maxTicksLimit: 12 }, grid: { color: GRID_LINE } },
+        y: { title: { display: true, text: "cumulative waiting (vehicle-seconds)", color: INK_SOFT }, ticks: { color: INK_SOFT }, grid: { color: GRID_LINE } },
       },
-      plugins: { legend: { labels: { color: "#e6e9ec" } } },
+      plugins: { legend: { labels: { color: INK, font: { family: "Outfit" } } } },
     },
+  });
+}
+
+function updateBoard(sims) {
+  const board = document.getElementById("board");
+  const ranked = Object.entries(sims)
+    .map(([name, s]) => ({ name, wait: s.metrics.cum_wait }))
+    .sort((a, b) => a.wait - b.wait);
+  ranked.forEach((r, i) => {
+    const chip = board.querySelector(`[data-name="${r.name}"]`);
+    if (!chip) return;
+    chip.style.order = i;
+    chip.classList.toggle("leader", i === 0 && ranked.length > 1);
+    chip.querySelector(".tag").hidden = !(i === 0 && ranked.length > 1);
+    chip.querySelector(".val").textContent = (r.wait / 60).toFixed(0) + " veh·min";
   });
 }
 
@@ -230,7 +271,7 @@ function start() {
     } else if (msg.type === "frame") onFrame(msg);
     else if (msg.type === "done") setStatus("episode finished", false);
   };
-  ws.onclose = () => setStatus("idle", false);
+  ws.onclose = () => { if (!document.getElementById("start").disabled) return; setStatus("idle", false); };
 }
 
 function onFrame(msg) {
@@ -244,6 +285,7 @@ function onFrame(msg) {
     p.a.textContent = sim.metrics.arrived;
     p.w.textContent = (sim.metrics.cum_wait / 60).toFixed(0) + " veh·min";
   }
+  updateBoard(msg.sims);
   if (msg.time % 10 === 0 && chart) {
     chart.data.labels.push(msg.time);
     chart.data.datasets.forEach(ds => {
@@ -255,7 +297,9 @@ function onFrame(msg) {
 }
 
 function setStatus(text, running) {
-  document.getElementById("status").textContent = text;
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.classList.toggle("live", running);
   document.getElementById("start").disabled = running;
   document.getElementById("stop").disabled = !running;
 }
