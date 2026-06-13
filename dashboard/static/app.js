@@ -1,144 +1,122 @@
 // SmartSignal dashboard: renders lockstep simulations streamed over WebSocket.
-// Two renderers: a hand-drawn single-intersection view, and a generic vector
-// view for grid scenarios whose edge ids follow the "A__B" naming convention.
+// One geometry-driven renderer for every scenario: the server sends each lane's
+// real polyline once, then a per-vehicle position list each frame. The client
+// maps world -> canvas, draws the roads, the signal heads, and the cars, and
+// interpolates car positions between frames so motion stays fluid at high speed.
 
 const COLORS = { fixed: "#e89aa4", actuated: "#f0bd8d", maxpressure: "#94b4e4", rl: "#8fd4ae" };
 const LABELS = { fixed: "Fixed timer", actuated: "Actuated (SUMO)", maxpressure: "Max-pressure", rl: "PPO agent (RL)" };
 const SIGNAL = { green: "#34b27d", yellow: "#e6ac2f", red: "#e06c66" };
-const INK = "#38324a", INK_SOFT = "#7b748f", GRID_LINE = "#ece9f4";
-const ROAD = "#e7e4f0", JUNCTION = "#dcd7ea", LANE_LINE = "#d2cce2", QUEUE = "rgba(224, 108, 102, 0.75)";
+const INK_SOFT = "#7b748f", ROAD = "#e7e4f0", LANE_LINE = "#d2cce2";
+const CAR_MOVING = "#5fb98a", CAR_STOPPED = "#e06c66";
+const CANVAS = 320, PAD = 18;
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// --- single intersection geometry (320x320 canvas, right-hand traffic) -------
-const C = 160, HALF = 42, LW = 14, BOX = [C - HALF, C + HALF];
-function laneRect(dir, idx) {
-  switch (dir) {
-    case "N": return { x: 118 + idx * LW, y: 0, w: LW, h: 118, vert: true, stop: 118, dq: -1 };
-    case "S": return { x: 188 - idx * LW, y: 202, w: LW, h: 118, vert: true, stop: 202, dq: 1 };
-    case "E": return { x: 202, y: 118 + idx * LW, w: 118, h: LW, vert: false, stop: 202, dq: 1 };
-    case "W": return { x: 0, y: 188 - idx * LW, w: 118, h: LW, vert: false, stop: 118, dq: -1 };
-  }
+// --- world -> canvas transform from the network bounding box ------------------
+function makeTransform(bounds) {
+  const [[x0, y0], [x1, y1]] = bounds;
+  const w = Math.max(x1 - x0, 1), h = Math.max(y1 - y0, 1);
+  const scale = Math.min((CANVAS - 2 * PAD) / w, (CANVAS - 2 * PAD) / h);
+  const ox = (CANVAS - w * scale) / 2, oy = (CANVAS - h * scale) / 2;
+  return {
+    scale,
+    tx: x => ox + (x - x0) * scale,
+    ty: y => CANVAS - (oy + (y - y0) * scale), // flip Y: SUMO is y-up
+  };
 }
 
-function drawIntersection(ctx, lanes, colors, queues) {
-  ctx.clearRect(0, 0, 320, 320);
-  ctx.fillStyle = ROAD;
-  ctx.fillRect(BOX[0], 0, HALF * 2, 320);
-  ctx.fillRect(0, BOX[0], 320, HALF * 2);
-  ctx.fillStyle = JUNCTION;
-  ctx.fillRect(BOX[0], BOX[0], HALF * 2, HALF * 2);
-  ctx.strokeStyle = LANE_LINE;
-  ctx.beginPath();
-  ctx.moveTo(C, 0); ctx.lineTo(C, BOX[0]); ctx.moveTo(C, BOX[1]); ctx.lineTo(C, 320);
-  ctx.moveTo(0, C); ctx.lineTo(BOX[0], C); ctx.moveTo(BOX[1], C); ctx.lineTo(320, C);
-  ctx.stroke();
-
-  for (const lane of lanes) {
-    const [dir, , idxStr] = lane.split("_");
-    const idx = +idxStr;
-    const r = laneRect(dir, idx);
-    ctx.strokeStyle = LANE_LINE;
-    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-    const q = Math.min(queues[lane] || 0, 22);
-    if (q > 0) {
-      ctx.fillStyle = QUEUE;
-      const len = q * 5;
-      if (r.vert) ctx.fillRect(r.x + 2, r.dq < 0 ? r.stop - len : r.stop, r.w - 4, len);
-      else ctx.fillRect(r.dq < 0 ? r.stop - len : r.stop, r.y + 2, len, r.h - 4);
-    }
-    ctx.fillStyle = SIGNAL[colors[lane]] || INK_SOFT;
-    if (r.vert) ctx.fillRect(r.x + 2, r.dq < 0 ? r.stop - 5 : r.stop + 1, r.w - 4, 4);
-    else ctx.fillRect(r.dq < 0 ? r.stop - 5 : r.stop + 1, r.y + 2, 4, r.h - 4);
-  }
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = "11px Outfit, sans-serif";
-  ctx.fillText("N", 154, 12); ctx.fillText("S", 154, 314);
-  ctx.fillText("W", 6, 164); ctx.fillText("E", 306, 164);
-}
-
-// --- generic grid renderer ----------------------------------------------------
-// Lane ids look like "W00__J00_2": edge from node W00 to node J00, lane 2.
-// Lane 0 is the rightmost lane (right-hand traffic).
-function buildGridGeometry(lanes, nodes, W = 320, H = 320, pad = 20) {
-  const xs = Object.values(nodes).map(p => p[0]);
-  const ys = Object.values(nodes).map(p => p[1]);
-  const [minX, maxX] = [Math.min(...xs), Math.max(...xs)];
-  const [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
-  const s = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / (maxY - minY));
-  const tx = x => pad + (x - minX) * s;
-  const ty = y => H - (pad + (y - minY) * s);
-
-  const lw = 3.5, jr = 13, nLanes = 3;
-  const geo = { lanes: {}, segs: [], junctions: [] };
-  const segSeen = new Set();
-  const junctionSeen = new Set();
-
-  for (const lane of lanes) {
-    const m = lane.match(/^(.+)__(.+)_(\d+)$/);
-    if (!m || !nodes[m[1]] || !nodes[m[2]]) return null;
-    const [, a, b, idxStr] = m;
-    const idx = +idxStr;
-    const p1 = [tx(nodes[a][0]), ty(nodes[a][1])];
-    const p2 = [tx(nodes[b][0]), ty(nodes[b][1])];
-    const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-    const d = [(p2[0] - p1[0]) / len, (p2[1] - p1[1]) / len];
-    const r = [-d[1], d[0]]; // right-hand side of travel, canvas coords
-    const off = lw * (nLanes - idx - 0.5);
-    const stop = [
-      p2[0] - d[0] * jr + r[0] * off,
-      p2[1] - d[1] * jr + r[1] * off,
-    ];
-    geo.lanes[lane] = { stop, back: [-d[0], -d[1]], maxLen: len - 2 * jr };
-
-    const segKey = [a, b].sort().join("|");
-    if (!segSeen.has(segKey)) {
-      segSeen.add(segKey);
-      geo.segs.push([p1, p2]);
-    }
-    if (b.startsWith("J") && !junctionSeen.has(b)) {
-      junctionSeen.add(b);
-      geo.junctions.push({ id: b, p: p2 });
-    }
-  }
-  geo.roadWidth = lw * nLanes * 2 + 2;
-  geo.lw = lw;
-  return geo;
-}
-
-function drawGrid(ctx, geo, colors, queues) {
-  ctx.clearRect(0, 0, 320, 320);
+// --- static road layer, rasterized once per geometry to its own canvas --------
+function buildRoadLayer(geo, T) {
+  const c = document.createElement("canvas");
+  c.width = CANVAS; c.height = CANVAS;
+  const ctx = c.getContext("2d");
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.strokeStyle = ROAD;
-  ctx.lineWidth = geo.roadWidth;
-  for (const [p1, p2] of geo.segs) {
-    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
-  }
-  ctx.fillStyle = JUNCTION;
-  for (const j of geo.junctions) {
-    const r = geo.roadWidth / 2 + 1;
-    ctx.fillRect(j.p[0] - r, j.p[1] - r, 2 * r, 2 * r);
-  }
-  for (const [lane, g] of Object.entries(geo.lanes)) {
-    const q = Math.min(queues[lane] || 0, 25);
-    if (q > 0) {
-      const len = Math.min(q * 3, g.maxLen);
-      ctx.strokeStyle = QUEUE;
-      ctx.lineWidth = geo.lw - 1;
-      ctx.beginPath();
-      ctx.moveTo(g.stop[0], g.stop[1]);
-      ctx.lineTo(g.stop[0] + g.back[0] * len, g.stop[1] + g.back[1] * len);
-      ctx.stroke();
-    }
-    ctx.fillStyle = SIGNAL[colors[lane]] || INK_SOFT;
+  ctx.lineWidth = Math.max(3.4 * T.scale, 4);
+  for (const pts of Object.values(geo.laneShapes)) {
+    if (pts.length < 2) continue;
     ctx.beginPath();
-    ctx.arc(g.stop[0], g.stop[1], 2.2, 0, 2 * Math.PI);
-    ctx.fill();
+    ctx.moveTo(T.tx(pts[0][0]), T.ty(pts[0][1]));
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(T.tx(pts[i][0]), T.ty(pts[i][1]));
+    ctx.stroke();
   }
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = "10px Outfit, sans-serif";
-  for (const j of geo.junctions) ctx.fillText(j.id, j.p[0] - 9, j.p[1] + 3);
+  return c;
 }
 
-// --- app state ---------------------------------------------------------------
-let ws = null, chart = null, panels = {}, lanes = [], gridGeo = null, cfg = null;
+// signal head = last point of each incoming lane, plus the inbound direction
+function buildSignalHeads(geo, T) {
+  const heads = {};
+  for (const lane of geo.signalLanes) {
+    const pts = geo.laneShapes[lane];
+    if (!pts || pts.length < 2) continue;
+    const a = pts[pts.length - 2], b = pts[pts.length - 1];
+    const ang = Math.atan2(T.ty(b[1]) - T.ty(a[1]), T.tx(b[0]) - T.tx(a[0]));
+    heads[lane] = { x: T.tx(b[0]), y: T.ty(b[1]), nx: Math.cos(ang), ny: Math.sin(ang) };
+  }
+  return heads;
+}
+
+function drawScene(view, frame, prev, alpha) {
+  const { ctx, T, road, heads } = view;
+  ctx.clearRect(0, 0, CANVAS, CANVAS);
+  ctx.drawImage(road, 0, 0);
+
+  // signal heads: a short colored cap across the lane mouth
+  const capLen = Math.max(2.2 * T.scale, 3.5);
+  ctx.lineWidth = Math.max(3.4 * T.scale, 4);
+  ctx.lineCap = "butt";
+  for (const [lane, h] of Object.entries(heads)) {
+    ctx.strokeStyle = SIGNAL[frame.colors[lane]] || INK_SOFT;
+    ctx.beginPath();
+    ctx.moveTo(h.x - h.nx * capLen, h.y - h.ny * capLen);
+    ctx.lineTo(h.x, h.y);
+    ctx.stroke();
+  }
+
+  // cars: interpolate position by matching id against the previous frame
+  const prevById = prev ? prev._byId : null;
+  const cw = Math.max(4.6 * T.scale, 3.4), ch = Math.max(2.0 * T.scale, 2.2);
+  for (const v of frame.vehicles) {
+    const [id, x, y, ang, stopped] = v;
+    let px = x, py = y, pa = ang;
+    if (prevById && alpha < 1) {
+      const p = prevById[id];
+      if (p) {
+        px = p[1] + (x - p[1]) * alpha;
+        py = p[2] + (y - p[2]) * alpha;
+        pa = p[3] + angleDelta(p[3], ang) * alpha;
+      }
+    }
+    const cx = T.tx(px), cy = T.ty(py);
+    const rad = (90 - pa) * Math.PI / 180; // SUMO angle: 0=north, clockwise
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-rad);
+    ctx.fillStyle = stopped ? CAR_STOPPED : CAR_MOVING;
+    roundRect(ctx, -cw / 2, -ch / 2, cw, ch, Math.min(ch / 2, 1.6));
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function angleDelta(a, b) {
+  let d = ((b - a + 540) % 360) - 180; // shortest signed turn
+  return d;
+}
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// --- app state ----------------------------------------------------------------
+let ws = null, chart = null, panels = {}, cfg = null;
+let geometry = null, transform = null, roadLayer = null, signalHeads = null;
+let rafId = null;
 
 async function init() {
   cfg = await (await fetch("/api/config")).json();
@@ -196,6 +174,7 @@ function buildPanels(names) {
     panels[name] = {
       ctx: div.querySelector("canvas").getContext("2d"),
       q: div.querySelector(".q"), a: div.querySelector(".a"), w: div.querySelector(".w"),
+      view: null, prev: null, cur: null, tPrev: 0, tCur: 0,
     };
   }
 
@@ -224,10 +203,10 @@ function buildPanels(names) {
     options: {
       animation: false, responsive: true, maintainAspectRatio: false,
       scales: {
-        x: { title: { display: true, text: "simulation time (s)", color: INK_SOFT }, ticks: { color: INK_SOFT, maxTicksLimit: 12 }, grid: { color: GRID_LINE } },
-        y: { title: { display: true, text: "cumulative waiting (vehicle-seconds)", color: INK_SOFT }, ticks: { color: INK_SOFT }, grid: { color: GRID_LINE } },
+        x: { title: { display: true, text: "simulation time (s)", color: INK_SOFT }, ticks: { color: INK_SOFT, maxTicksLimit: 12 }, grid: { color: "#ece9f4" } },
+        y: { title: { display: true, text: "cumulative waiting (vehicle-seconds)", color: INK_SOFT }, ticks: { color: INK_SOFT }, grid: { color: "#ece9f4" } },
       },
-      plugins: { legend: { labels: { color: INK, font: { family: "Outfit" } } } },
+      plugins: { legend: { labels: { color: "#38324a", font: { family: "Outfit" } } } },
     },
   });
 }
@@ -247,10 +226,26 @@ function updateBoard(sims) {
   });
 }
 
+// single render loop drives every panel; interpolates between the last two frames
+function renderLoop() {
+  const now = performance.now();
+  for (const p of Object.values(panels)) {
+    if (!p.view || !p.cur) continue;
+    let alpha = 1;
+    if (!reduceMotion && p.prev) {
+      const span = p.tCur - p.tPrev;
+      alpha = span > 0 ? Math.min((now - p.tCur) / span, 1) : 1;
+    }
+    drawScene(p.view, p.cur, p.prev, alpha);
+  }
+  rafId = requestAnimationFrame(renderLoop);
+}
+
 function start() {
   const names = [...document.querySelectorAll("#ctrls input:checked")].map(i => i.value);
   if (!names.length) return alert("pick at least one controller");
   buildPanels(names);
+  geometry = null;
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => {
     ws.send(JSON.stringify({
@@ -266,8 +261,14 @@ function start() {
   ws.onmessage = e => {
     const msg = JSON.parse(e.data);
     if (msg.type === "init") {
-      lanes = msg.lanes;
-      gridGeo = msg.scenario === "single" ? null : buildGridGeometry(lanes, msg.nodes);
+      geometry = msg.geometry;
+      transform = makeTransform(geometry.bounds);
+      roadLayer = buildRoadLayer(geometry, transform);
+      signalHeads = buildSignalHeads(geometry, transform);
+      for (const name of msg.controllers) {
+        if (panels[name]) panels[name].view = { ctx: panels[name].ctx, T: transform, road: roadLayer, heads: signalHeads };
+      }
+      if (!rafId) rafId = requestAnimationFrame(renderLoop);
     } else if (msg.type === "frame") onFrame(msg);
     else if (msg.type === "done") setStatus("episode finished", false);
   };
@@ -276,11 +277,14 @@ function start() {
 
 function onFrame(msg) {
   document.getElementById("status").textContent = `t = ${msg.time}s`;
+  const now = performance.now();
   for (const [name, sim] of Object.entries(msg.sims)) {
     const p = panels[name];
     if (!p) continue;
-    if (gridGeo) drawGrid(p.ctx, gridGeo, sim.colors, sim.queues);
-    else drawIntersection(p.ctx, lanes, sim.colors, sim.queues);
+    sim._byId = Object.create(null);
+    for (const v of sim.vehicles) sim._byId[v[0]] = v;
+    p.prev = p.cur; p.tPrev = p.tCur;
+    p.cur = sim; p.tCur = now;
     p.q.textContent = sim.metrics.queued;
     p.a.textContent = sim.metrics.arrived;
     p.w.textContent = (sim.metrics.cum_wait / 60).toFixed(0) + " veh·min";
@@ -302,6 +306,7 @@ function setStatus(text, running) {
   el.classList.toggle("live", running);
   document.getElementById("start").disabled = running;
   document.getElementById("stop").disabled = !running;
+  if (!running && rafId) { cancelAnimationFrame(rafId); rafId = null; }
 }
 
 document.getElementById("start").onclick = start;

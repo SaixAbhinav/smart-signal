@@ -98,15 +98,23 @@ class SimInstance:
         self.arrived = 0
         self.cum_wait = 0.0  # vehicle-seconds spent halted
 
-    def node_positions(self) -> dict[str, list[float]]:
-        """Coordinates for the grid renderer (edge ids follow 'A__B' naming)."""
-        nodes = set()
-        for lane in self.in_lanes:
-            edge = lane.rsplit("_", 1)[0]
-            if "__" in edge:
-                nodes.update(edge.split("__"))
+        # Real road geometry, captured once. Lane polylines (incl. internal
+        # ":"-prefixed junction lanes so turn arcs render) are world-coordinate
+        # paths the client draws as roads and the cars ride along.
+        (x0, y0), (x1, y1) = self.conn.simulation.getNetBoundary()
+        self.bounds = [[x0, y0], [x1, y1]]
+        self.lane_shapes = {
+            lid: [[round(x, 1), round(y, 1)] for x, y in self.conn.lane.getShape(lid)]
+            for lid in self.conn.lane.getIDList()
+        }
+
+    def geometry(self) -> dict:
+        """Static scene geometry sent once at init: world bounds, every lane's
+        polyline, and which lanes carry a signal head (the incoming lanes)."""
         return {
-            n: list(self.conn.junction.getPosition(n)) for n in sorted(nodes)
+            "bounds": self.bounds,
+            "laneShapes": self.lane_shapes,
+            "signalLanes": self.in_lanes,
         }
 
     def step_second(self) -> None:
@@ -126,19 +134,26 @@ class SimInstance:
             for t in self.tls_lanes
         }
         rank = {"G": 3, "g": 2, "y": 1}
-        colors, queues = {}, {}
+        colors = {}
         queued_now = 0
         for lane, (t, sig_idxs) in self.lane_sig.items():
             state = states[t]
             best = max((state[i] for i in sig_idxs), key=lambda c: rank.get(c, 0), default="r")
             colors[lane] = "green" if best in "Gg" else "yellow" if best == "y" else "red"
-            q = self.conn.lane.getLastStepHaltingNumber(lane)
-            queues[lane] = q
-            queued_now += q
+            queued_now += self.conn.lane.getLastStepHaltingNumber(lane)
         self.cum_wait += queued_now
+
+        veh = self.conn.vehicle
+        vehicles = []
+        for vid in veh.getIDList():
+            x, y = veh.getPosition(vid)
+            vehicles.append([
+                vid, round(x, 1), round(y, 1), round(veh.getAngle(vid)),
+                1 if veh.getSpeed(vid) < 0.1 else 0,
+            ])
         return {
             "colors": colors,
-            "queues": queues,
+            "vehicles": vehicles,
             "metrics": {
                 "queued": queued_now,
                 "arrived": self.arrived,
@@ -201,8 +216,7 @@ async def ws_endpoint(ws: WebSocket):
                             "type": "init",
                             "scenario": scenario,
                             "controllers": [s.name for s in sims],
-                            "lanes": sims[0].in_lanes,
-                            "nodes": sims[0].node_positions(),
+                            "geometry": sims[0].geometry(),
                         }
                     )
                 elif cmd == "speed":

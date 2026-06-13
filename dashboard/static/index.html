@@ -82,7 +82,10 @@
   .demo-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
   .demo-head h2 { display: flex; align-items: center; gap: 12px; }
   .pill-tag { font-size: 12px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 3px 11px; }
-  .caption { color: var(--ink-soft); font-size: 14.5px; margin-bottom: 18px; max-width: 70ch; }
+  .caption { color: var(--ink-soft); font-size: 14.5px; margin-bottom: 18px; max-width: 74ch; }
+  .legend { display: inline-flex; gap: 14px; margin: 0 4px; vertical-align: middle; }
+  .legend .lg { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
+  .legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 
   .controls {
     display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center;
@@ -313,9 +316,9 @@
       </div>
       <p class="caption">
         Every controller drives an identical copy of the same road, with the same cars arriving in the
-        same order (same random seed). Watch the queues build under one controller and stay clear under
-        another. Red bars are waiting cars; the dots are signal states. The leaderboard re-ranks live by
-        total time drivers have spent stopped.
+        same order (same random seed). Each dot is a car following its real path through the network.
+        <span class="legend"><span class="lg"><span class="sw" style="background:#5fb98a"></span>moving</span><span class="lg"><span class="sw" style="background:#e06c66"></span>stopped</span></span>
+        The leaderboard re-ranks live by total time drivers have spent waiting.
       </p>
 
       <div class="controls">
@@ -547,7 +550,7 @@ uvicorn dashboard.server:app
     </div>
   </footer>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=3"></script>
 <script>
   // Animate result bars when they scroll into view (motivated: shows the magnitude
   // of the gap as the reader arrives at it). Honors reduced-motion via CSS.
