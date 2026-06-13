@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartSignal — Live Controller Comparison</title>
+<title>SmartSignal — Reinforcement Learning for Traffic Signals</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   /* Pastel system: lavender paper base, white panels, ink text.
-     One accent (peach) for actions; rose/apricot/periwinkle/mint encode controllers.
+     One accent (cherry red) for actions; rose/apricot/periwinkle/mint encode controllers.
      Shape rule: buttons pill, cards 16px, inputs 10px. Numbers are always mono. */
   :root {
     --paper: #f6f4fa;
@@ -31,6 +31,7 @@
     --shadow-lift: 0 2px 4px rgba(95, 81, 140, 0.07), 0 14px 36px rgba(95, 81, 140, 0.13);
   }
   * { box-sizing: border-box; margin: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
   body {
     background:
       radial-gradient(900px 500px at 85% -10%, #fde8eb 0%, transparent 60%),
@@ -40,22 +41,53 @@
     background-attachment: fixed;
     color: var(--ink);
     font-family: "Outfit", sans-serif;
-    padding: 28px clamp(16px, 4vw, 48px) 48px;
+    line-height: 1.6;
     min-height: 100dvh;
   }
   .mono { font-family: "Spline Sans Mono", monospace; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
 
-  /* header */
-  header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
-  h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
+  /* sticky nav */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(246, 244, 250, 0.82); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap { display: flex; align-items: center; height: 64px; gap: 8px; }
+  nav .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.03em; margin-right: auto; }
+  nav .brand span { color: var(--accent); }
+  nav a { color: var(--ink-soft); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 10px; border-radius: 8px; transition: color .2s, background .2s; }
+  nav a:hover { color: var(--accent); background: var(--accent-soft); }
+  .nav-links { display: flex; gap: 2px; }
+  @media (max-width: 760px) { .nav-links { display: none; } }
+
+  /* hero */
+  .hero { padding: 64px 0 36px; }
+  .hero .kicker { color: var(--accent); font-weight: 600; font-size: 13.5px; letter-spacing: 0.02em; margin-bottom: 14px; }
+  h1 { font-size: clamp(34px, 6vw, 60px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.04; max-width: 16ch; }
   h1 span { color: var(--accent); }
-  .sub { color: var(--ink-soft); font-size: 14.5px; margin-bottom: 22px; max-width: 56ch; }
+  .hero p { color: var(--ink-soft); font-size: clamp(15px, 2vw, 18px); max-width: 60ch; margin-top: 18px; }
+  .hero-stats { display: flex; gap: 36px; flex-wrap: wrap; margin-top: 30px; }
+  .hero-stats div b { font-family: "Spline Sans Mono", monospace; font-size: 26px; font-weight: 600; display: block; letter-spacing: -0.02em; }
+  .hero-stats div span { color: var(--ink-soft); font-size: 13px; }
+  .hero-stats .pop b { color: var(--accent); }
 
-  /* control bar */
+  /* sections */
+  section { padding: 40px 0; }
+  section h2 { font-size: clamp(24px, 3.5vw, 34px); font-weight: 700; letter-spacing: -0.025em; }
+  section .lede { color: var(--ink-soft); font-size: 16px; max-width: 66ch; margin-top: 12px; }
+  .divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+  /* the live demo block */
+  .demo-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+  .demo-head h2 { display: flex; align-items: center; gap: 12px; }
+  .pill-tag { font-size: 12px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 3px 11px; }
+  .caption { color: var(--ink-soft); font-size: 14.5px; margin-bottom: 18px; max-width: 70ch; }
+
   .controls {
     display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center;
     background: var(--panel); border: 1px solid var(--border);
-    border-radius: 16px; padding: 14px 20px; margin-bottom: 22px;
+    border-radius: 16px; padding: 14px 20px; margin-bottom: 16px;
     font-size: 14px; box-shadow: var(--shadow);
   }
   .controls label { color: var(--ink-soft); margin-right: 6px; font-weight: 500; }
@@ -100,7 +132,6 @@
     100% { box-shadow: 0 0 0 9px rgba(143, 212, 174, 0); }
   }
 
-  /* live leaderboard */
   #board { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; min-height: 0; }
   .board-chip {
     display: flex; align-items: center; gap: 10px;
@@ -117,7 +148,6 @@
     padding: 2px 9px; font-size: 11px; font-weight: 600;
   }
 
-  /* sim panels */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; }
   .sim-panel {
     background: var(--panel); border: 1px solid var(--border);
@@ -142,54 +172,395 @@
     font-family: "Spline Sans Mono", monospace; letter-spacing: -0.02em;
   }
 
-  /* chart */
   .chart-panel {
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 16px; padding: 18px; margin-top: 20px; height: 320px;
     box-shadow: var(--shadow);
   }
 
-  /* empty state */
   #empty {
     border: 1.5px dashed var(--border-strong); border-radius: 16px;
     padding: 56px 24px; text-align: center; color: var(--ink-soft); font-size: 14.5px;
   }
   #empty b { color: var(--ink); display: block; font-size: 17px; margin-bottom: 6px; font-weight: 700; }
 
+  /* the RL loop */
+  .loop { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; align-items: stretch; }
+  .loop .step {
+    flex: 1 1 150px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px 16px; box-shadow: var(--shadow); position: relative;
+  }
+  .loop .step .n { font-family: "Spline Sans Mono", monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .loop .step h4 { font-size: 15.5px; font-weight: 700; margin: 6px 0 6px; }
+  .loop .step p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; }
+  .loop .arrow { align-self: center; color: var(--border-strong); font-size: 22px; }
+  @media (max-width: 760px) { .loop .arrow { transform: rotate(90deg); } }
+
+  /* scenario + concept two-up */
+  .two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 26px; }
+  @media (max-width: 820px) { .two-up { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px; box-shadow: var(--shadow);
+  }
+  .card h3 { font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+  .card .meta { color: var(--ink-soft); font-size: 13px; margin-bottom: 12px; }
+  .card p { font-size: 14.5px; color: var(--ink-soft); }
+  .card p + p { margin-top: 10px; }
+
+  /* controller definition list */
+  .controllers { display: grid; gap: 12px; margin-top: 26px; }
+  .ctrl-row {
+    display: grid; grid-template-columns: 200px 1fr; gap: 20px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px 24px; box-shadow: var(--shadow);
+    align-items: start;
+  }
+  @media (max-width: 720px) { .ctrl-row { grid-template-columns: 1fr; gap: 8px; } }
+  .ctrl-row .name { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+  .ctrl-row .name .swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .ctrl-row .name .tier { font-size: 11px; font-weight: 600; color: var(--ink-soft); background: var(--panel-soft); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+  .ctrl-row p { font-size: 14px; color: var(--ink-soft); }
+
+  /* spec list (observation / action / reward) */
+  .spec { display: grid; gap: 14px; margin-top: 26px; }
+  .spec-item { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px 24px; box-shadow: var(--shadow); }
+  .spec-item h4 { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .spec-item h4 .tg { font-family: "Spline Sans Mono", monospace; font-size: 12px; color: var(--accent-ink); background: var(--accent-soft); padding: 2px 9px; border-radius: 999px; }
+  .spec-item p { font-size: 14.5px; color: var(--ink-soft); margin-top: 8px; }
+  .spec-item code { font-family: "Spline Sans Mono", monospace; font-size: 13px; background: var(--panel-soft); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; color: var(--ink); }
+
+  /* results bars */
+  .result-block { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); margin-top: 18px; }
+  .result-block h3 { font-size: 17px; font-weight: 700; }
+  .result-block .unit { color: var(--ink-soft); font-size: 13px; margin-bottom: 18px; }
+  .bar-row { display: grid; grid-template-columns: 130px 1fr 90px; align-items: center; gap: 14px; margin: 9px 0; }
+  @media (max-width: 600px) { .bar-row { grid-template-columns: 100px 1fr 64px; gap: 8px; } }
+  .bar-row .lbl { font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .bar-row .lbl .swatch { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .bar-track { display: block; background: var(--panel-soft); border-radius: 999px; height: 22px; overflow: hidden; border: 1px solid var(--border); }
+  .bar-fill { display: block; height: 100%; border-radius: 999px; width: 0; transition: width 1s cubic-bezier(0.16, 1, 0.3, 1); }
+  .bar-row .num { font-family: "Spline Sans Mono", monospace; font-size: 14px; text-align: right; font-weight: 600; }
+
+  .curves { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+  @media (max-width: 820px) { .curves { grid-template-columns: 1fr; } }
+  .curve-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); }
+  .curve-card img { width: 100%; border-radius: 10px; display: block; }
+  .curve-card p { font-size: 13px; color: var(--ink-soft); margin-top: 10px; }
+
+  /* run / commands */
+  .codeblock {
+    background: #2b2640; color: #ece9f4; border-radius: 16px;
+    padding: 22px 24px; margin-top: 20px; overflow-x: auto;
+    font-family: "Spline Sans Mono", monospace; font-size: 13.5px; line-height: 1.85;
+    box-shadow: var(--shadow);
+  }
+  .codeblock .c { color: #b3a8d6; }
+  .codeblock .p { color: var(--rose); }
+
+  footer { border-top: 1px solid var(--border); margin-top: 40px; padding: 30px 0 50px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: baseline; justify-content: space-between; }
+  footer .stack { color: var(--ink-soft); font-size: 13px; }
+  footer .stack b { color: var(--ink); font-weight: 600; }
+  footer .note { color: var(--ink-soft); font-size: 13px; max-width: 44ch; }
+
   @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
     * { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
 <body>
-  <header>
-    <h1>Smart<span>Signal</span></h1>
-  </header>
-  <div class="sub">Same road, same cars, same seed. Different signal controllers, racing side by side in real time.</div>
 
-  <div class="controls">
-    <span><label>Scenario</label><select id="scenario"></select></span>
-    <span><label>Demand</label><select id="profile"></select></span>
-    <span><label>Seed</label><input id="seed" type="number" value="0" min="0"></span>
-    <span class="ctrl-chk" id="ctrls"></span>
-    <span><label>Speed</label><input id="speed" type="range" min="1" max="60" value="10">
-      <span id="speedVal" class="mono">10×</span></span>
-    <button id="start">Start</button>
-    <button id="stop" disabled>Stop</button>
-    <span id="status">idle</span>
-  </div>
-
-  <div id="board"></div>
-
-  <div class="grid" id="grid">
-    <div id="empty" style="grid-column: 1 / -1;">
-      <b>Pick your contenders</b>
-      Choose a scenario and two or more controllers, then press Start to watch them handle identical traffic.
+  <nav>
+    <div class="wrap">
+      <div class="brand">Smart<span>Signal</span></div>
+      <div class="nav-links">
+        <a href="#demo">Live demo</a>
+        <a href="#problem">The problem</a>
+        <a href="#how">How it works</a>
+        <a href="#controllers">Controllers</a>
+        <a href="#learning">What it learns</a>
+        <a href="#results">Results</a>
+        <a href="#run">Run it</a>
+      </div>
     </div>
-  </div>
+  </nav>
 
-  <div class="chart-panel"><canvas id="chart"></canvas></div>
+  <header class="hero">
+    <div class="wrap">
+      <div class="kicker">Reinforcement learning for traffic signals</div>
+      <h1>Traffic lights that <span>think</span> instead of counting seconds.</h1>
+      <p>
+        SmartSignal trains a reinforcement-learning agent to control traffic lights from live
+        conditions, then pits it against the controllers traffic engineers actually deploy.
+        Everything below the demo documents what the project does and how it works.
+      </p>
+      <div class="hero-stats">
+        <div class="pop"><b>91%</b><span>less waiting vs a fixed timer</span></div>
+        <div class="pop"><b>22-35%</b><span>less waiting vs max-pressure (grid)</span></div>
+        <div><b>~35 min</b><span>to train on a laptop CPU</span></div>
+        <div><b>4</b><span>controllers compared head to head</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== THE MAIN FOCUS: LIVE DEMO ===================== -->
+  <section id="demo">
+    <div class="wrap">
+      <div class="demo-head">
+        <h2>Live comparison <span class="pill-tag">the scenario</span></h2>
+      </div>
+      <p class="caption">
+        Every controller drives an identical copy of the same road, with the same cars arriving in the
+        same order (same random seed). Watch the queues build under one controller and stay clear under
+        another. Red bars are waiting cars; the dots are signal states. The leaderboard re-ranks live by
+        total time drivers have spent stopped.
+      </p>
+
+      <div class="controls">
+        <span><label>Scenario</label><select id="scenario"></select></span>
+        <span><label>Demand</label><select id="profile"></select></span>
+        <span><label>Seed</label><input id="seed" type="number" value="0" min="0"></span>
+        <span class="ctrl-chk" id="ctrls"></span>
+        <span><label>Speed</label><input id="speed" type="range" min="1" max="60" value="10">
+          <span id="speedVal" class="mono">10×</span></span>
+        <button id="start">Start</button>
+        <button id="stop" disabled>Stop</button>
+        <span id="status">idle</span>
+      </div>
+
+      <div id="board"></div>
+
+      <div class="grid" id="grid">
+        <div id="empty" style="grid-column: 1 / -1;">
+          <b>Pick your contenders</b>
+          Choose a scenario and two or more controllers, then press Start to watch them handle identical traffic.
+        </div>
+      </div>
+
+      <div class="chart-panel"><canvas id="chart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ===================== THE PROBLEM ===================== -->
+  <section id="problem">
+    <div class="wrap">
+      <h2>Why fixed timers waste your time</h2>
+      <p class="lede">
+        A conventional traffic light runs a clock: 30 seconds of green this way, 30 seconds that way,
+        all day. It cannot tell whether a direction is empty or jammed, so it holds an empty road green
+        while cars pile up on the cross street. The cost shows up in three numbers that SmartSignal tracks
+        every second of every simulation.
+      </p>
+      <div class="loop" style="margin-top:22px">
+        <div class="step">
+          <h4>Waiting time</h4>
+          <p>Seconds each driver spends fully stopped. The headline number, and the one the agent is rewarded for cutting.</p>
+        </div>
+        <div class="step">
+          <h4>Queue length</h4>
+          <p>How many cars are halted at the line. Long queues spill back and block upstream junctions.</p>
+        </div>
+        <div class="step">
+          <h4>Throughput</h4>
+          <p>Cars that complete their trip. A good controller clears more cars with less waiting and lower emissions.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== HOW IT WORKS ===================== -->
+  <section id="how">
+    <div class="wrap">
+      <h2>How the agent works</h2>
+      <p class="lede">
+        SmartSignal frames signal control as a reinforcement-learning loop. Five times a minute the agent
+        looks at the junction, chooses which movement to serve next, and gets scored on whether traffic
+        improved. Over millions of these steps it learns a control policy without ever being told the rules.
+      </p>
+      <div class="loop">
+        <div class="step"><div class="n">01</div><h4>Simulate</h4><p>SUMO runs a realistic micro-simulation of cars, lanes, and turns on the road network.</p></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><div class="n">02</div><h4>Observe</h4><p>The agent reads queue length, vehicle density, and waiting time on every incoming lane, plus the current phase.</p></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><div class="n">03</div><h4>Decide</h4><p>It picks which green phase to serve next. Safety rules enforce yellow transitions and min/max green times.</p></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><div class="n">04</div><h4>Reward</h4><p>The drop in total waiting time since the last decision becomes the reward signal.</p></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><div class="n">05</div><h4>Learn</h4><p>PPO nudges the policy toward actions that earned reward, then the loop repeats.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== THE SCENARIOS ===================== -->
+  <section id="scenarios">
+    <div class="wrap">
+      <h2>Two scenarios to learn on</h2>
+      <p class="lede">The demo above runs both. Each uses seeded, time-varying demand so every comparison is reproducible.</p>
+      <div class="two-up">
+        <div class="card">
+          <h3>Single intersection</h3>
+          <div class="meta mono">4 approaches · 3 lanes each · protected left turns</div>
+          <p>A four-way junction with dedicated left-turn lanes and four green phases. This is where the agent has to beat a fixed timer, SUMO's actuated control, and max-pressure on its own.</p>
+          <p>Three demand profiles: calm off-peak, a north-south commuter rush, and a variable hour that ramps from quiet to peak and back, the case where a fixed timer hurts most.</p>
+        </div>
+        <div class="card">
+          <h3>2&times;2 grid</h3>
+          <div class="meta mono">4 junctions · one shared policy · corridor + balanced demand</div>
+          <p>Four junctions, each controlled by the same trained policy with added awareness of its neighbours' queues. Coordination has to emerge on its own, no hand-coded timing offsets.</p>
+          <p>A corridor demand profile sends heavy flow straight through, so the payoff is a green wave: cars cross both junctions with roughly one stop instead of stopping at each.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== THE CONTROLLERS ===================== -->
+  <section id="controllers">
+    <div class="wrap">
+      <h2>The four controllers</h2>
+      <p class="lede">
+        Beating a fixed timer is easy. The honest comparison is against the adaptive controllers a real
+        traffic engineer would reach for. All four are benchmarked on identical traffic.
+      </p>
+      <div class="controllers">
+        <div class="ctrl-row">
+          <div class="name"><span class="swatch" style="background:var(--rose)"></span>Fixed timer <span class="tier">baseline</span></div>
+          <p>Runs a fixed cycle: each phase gets a set green duration regardless of traffic. The status quo on most streets, and the floor everything else must clear.</p>
+        </div>
+        <div class="ctrl-row">
+          <div class="name"><span class="swatch" style="background:var(--apricot)"></span>Actuated <span class="tier">classical</span></div>
+          <p>SUMO's built-in gap-based control. It extends a green phase while cars keep arriving and switches when the flow breaks. Genuinely adaptive and widely deployed.</p>
+        </div>
+        <div class="ctrl-row">
+          <div class="name"><span class="swatch" style="background:var(--periwinkle)"></span>Max-pressure <span class="tier">classical</span></div>
+          <p>A research-grade rule that serves whichever phase has the largest imbalance between upstream and downstream queues. A strong, principled adaptive baseline.</p>
+        </div>
+        <div class="ctrl-row">
+          <div class="name"><span class="swatch" style="background:var(--mint)"></span>PPO agent <span class="tier">SmartSignal</span></div>
+          <p>The learned policy. A neural network trained with Proximal Policy Optimization to choose phases from live conditions. No traffic rules are programmed in; it discovers them.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WHAT THE AGENT SEES / DOES / LEARNS ===================== -->
+  <section id="learning">
+    <div class="wrap">
+      <h2>What the agent sees, does, and learns</h2>
+      <p class="lede">
+        The whole policy is defined by three things: its observation, its action space, and its reward.
+        Safety constraints sit between the agent and the road so it can never produce an illegal signal.
+      </p>
+      <div class="spec">
+        <div class="spec-item">
+          <h4>Observation <span class="tg">what it sees</span></h4>
+          <p>For every incoming lane: queue density, vehicle density, and normalized waiting time. Plus a one-hot of the active green phase and how long it has been running. All values scaled to <code>[0, 1]</code>.</p>
+        </div>
+        <div class="spec-item">
+          <h4>Action <span class="tg">what it does</span></h4>
+          <p>Once every <code>5 s</code> it picks the index of the next green phase to serve. The environment inserts the mandatory <code>3 s</code> yellow, holds a minimum <code>10 s</code> green, and force-rotates after <code>60 s</code> so no approach is ever starved.</p>
+        </div>
+        <div class="spec-item">
+          <h4>Reward <span class="tg">what it learns</span></h4>
+          <p>The reduction in total accumulated waiting time on incoming lanes since the last decision. Positive when the agent cleared cars, negative when waiting grew. Dense, stable, and tied directly to the headline metric.</p>
+        </div>
+        <div class="spec-item">
+          <h4>Algorithm <span class="tg">how it trains</span></h4>
+          <p>Proximal Policy Optimization (Stable-Baselines3) with a small <code>[128, 128]</code> MLP. About <code>500k</code> steps across 8 parallel simulations, randomizing the demand profile so the policy generalizes. Roughly 35 minutes on a laptop CPU.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RESULTS ===================== -->
+  <section id="results">
+    <div class="wrap">
+      <h2>Results</h2>
+      <p class="lede">
+        Mean over 5 random seeds, one simulated hour each. Lower is better. The fixed timer sets the
+        100% reference; shorter bars are faster.
+      </p>
+
+      <div class="result-block">
+        <h3>Single intersection</h3>
+        <div class="unit mono">average waiting time per vehicle · north-south rush profile (seconds)</div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--rose)"></span>Fixed timer</span><span class="bar-track"><span class="bar-fill" style="background:var(--rose)" data-pct="100"></span></span><span class="num">39.4 s</span></div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--apricot)"></span>Actuated</span><span class="bar-track"><span class="bar-fill" style="background:var(--apricot)" data-pct="23"></span></span><span class="num">9.2 s</span></div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--periwinkle)"></span>Max-pressure</span><span class="bar-track"><span class="bar-fill" style="background:var(--periwinkle)" data-pct="11"></span></span><span class="num">4.2 s</span></div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--mint)"></span>PPO agent</span><span class="bar-track"><span class="bar-fill" style="background:var(--mint)" data-pct="9"></span></span><span class="num">3.4 s</span></div>
+      </div>
+
+      <div class="result-block">
+        <h3>2&times;2 grid</h3>
+        <div class="unit mono">average waiting time per vehicle · corridor demand (seconds)</div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--rose)"></span>Fixed timer</span><span class="bar-track"><span class="bar-fill" style="background:var(--rose)" data-pct="100"></span></span><span class="num">85.3 s</span></div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--apricot)"></span>Actuated</span><span class="bar-track"><span class="bar-fill" style="background:var(--apricot)" data-pct="20"></span></span><span class="num">16.9 s</span></div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--periwinkle)"></span>Max-pressure</span><span class="bar-track"><span class="bar-fill" style="background:var(--periwinkle)" data-pct="11"></span></span><span class="num">9.5 s</span></div>
+        <div class="bar-row"><span class="lbl"><span class="swatch" style="background:var(--mint)"></span>PPO agent</span><span class="bar-track"><span class="bar-fill" style="background:var(--mint)" data-pct="9"></span></span><span class="num">7.4 s</span></div>
+        <p style="font-size:13.5px;color:var(--ink-soft);margin-top:16px;">
+          On the grid the learned policy also produces the green wave: corridor cars cross both junctions
+          with <b class="mono" style="color:var(--ink)">1.0</b> stop on average and the lowest end-to-end
+          travel time (<b class="mono" style="color:var(--ink)">66.7 s</b> vs <b class="mono" style="color:var(--ink)">163.5 s</b> for the fixed timer).
+        </p>
+      </div>
+
+      <div class="curves">
+        <div class="curve-card">
+          <img src="/docs/training_curve.png" alt="PPO training reward over time, single intersection">
+          <p>Single-intersection training. Mean episode reward climbs steeply and plateaus near zero (almost no avoidable waiting) within ~100k steps.</p>
+        </div>
+        <div class="curve-card">
+          <img src="/docs/training_curve_ppo_grid.png" alt="PPO training reward over time, 2x2 grid">
+          <p>Grid training. The shared policy converges more gradually as it learns to coordinate four junctions from neighbour-aware observations.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RUN IT ===================== -->
+  <section id="run">
+    <div class="wrap">
+      <h2>Run it yourself</h2>
+      <p class="lede">Everything is reproducible from the command line. The dashboard you are looking at is the last step.</p>
+      <div class="codeblock">
+<span class="c"># 1. install dependencies (SUMO ships as a pip wheel)</span><br>
+pip install <span class="p">-r</span> requirements.txt<br><br>
+<span class="c"># 2. generate seeded demand and benchmark the classical controllers</span><br>
+python <span class="p">-m</span> smartsignal.demand.generate_routes<br>
+python <span class="p">-m</span> smartsignal.evaluation.run_eval <span class="p">--controllers</span> fixed actuated maxpressure<br><br>
+<span class="c"># 3. train the agent (~35 min on CPU) and evaluate it</span><br>
+python <span class="p">-m</span> smartsignal.training.train_ppo<br>
+python <span class="p">-m</span> smartsignal.evaluation.run_eval <span class="p">--controllers</span> rl <span class="p">--model</span> models/ppo_single.zip<br><br>
+<span class="c"># 4. launch this dashboard</span><br>
+uvicorn dashboard.server:app
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="stack">
+        Built with <b>SUMO</b> · <b>Gymnasium</b> · <b>Stable-Baselines3 PPO</b> · <b>PyTorch</b> · <b>FastAPI</b> + WebSockets · <b>Chart.js</b>
+      </div>
+      <div class="note">A portfolio project demonstrating reinforcement learning for adaptive traffic signal control, benchmarked honestly against classical methods.</div>
+    </div>
+  </footer>
 
 <script src="/static/app.js"></script>
+<script>
+  // Animate result bars when they scroll into view (motivated: shows the magnitude
+  // of the gap as the reader arrives at it). Honors reduced-motion via CSS.
+  const fills = document.querySelectorAll(".bar-fill");
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) {
+        e.target.style.width = e.target.dataset.pct + "%";
+        io.unobserve(e.target);
+      }
+    }
+  }, { threshold: 0.4 });
+  fills.forEach(f => io.observe(f));
+</script>
 </body>
 </html>

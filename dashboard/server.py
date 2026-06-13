@@ -232,4 +232,7 @@ async def ws_endpoint(ws: WebSocket):
             s.close()
 
 
+DOCS_DIR = Path(resolve("docs"))
+if DOCS_DIR.exists():
+    app.mount("/docs", StaticFiles(directory=DOCS_DIR), name="docs")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
