@@ -1,0 +1,8 @@
+.git
+.claude
+**/__pycache__/
+*.pyc
+.pytest_cache/
+runs/
+*.tfevents.*
+*.md

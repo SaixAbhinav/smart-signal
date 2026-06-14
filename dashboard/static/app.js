@@ -246,7 +246,8 @@ function start() {
   if (!names.length) return alert("pick at least one controller");
   buildPanels(names);
   geometry = null;
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${wsProto}//${location.host}/ws`);
   ws.onopen = () => {
     ws.send(JSON.stringify({
       cmd: "start",

@@ -1,0 +1,12 @@
+# Render Blueprint for the SmartSignal live dashboard.
+# Deploy: render.com -> New -> Blueprint -> connect this repo.
+# Starts on the free instance (512 MB, spins down when idle). If the dashboard
+# OOMs under PyTorch + multiple live SUMO sims, bump `plan` to `starter` or `standard`.
+services:
+  - type: web
+    name: smartsignal-dashboard
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeploy: true
