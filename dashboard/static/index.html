@@ -31,7 +31,7 @@
     --shadow-lift: 0 2px 4px rgba(95, 81, 140, 0.07), 0 14px 36px rgba(95, 81, 140, 0.13);
   }
   * { box-sizing: border-box; margin: 0; }
-  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; scroll-snap-type: y proximity; }
   body {
     background:
       radial-gradient(900px 500px at 85% -10%, #fde8eb 0%, transparent 60%),
@@ -73,7 +73,14 @@
   .hero-stats .pop b { color: var(--accent); }
 
   /* sections */
-  section { padding: 40px 0; border-bottom: 1px solid var(--border); }
+  /* One section per screen: at least viewport-tall, content vertically centered.
+     Sections taller than the viewport (the demo) simply grow past it. */
+  section {
+    min-height: 100dvh;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 88px 0; border-bottom: 1px solid var(--border);
+    scroll-snap-align: start;
+  }
   section h2 { font-size: clamp(24px, 3.5vw, 34px); font-weight: 700; letter-spacing: -0.025em; }
   section .lede { color: var(--ink-soft); font-size: 16px; max-width: 66ch; margin-top: 12px; }
   .divider { height: 1px; background: var(--border); margin: 8px 0; }
