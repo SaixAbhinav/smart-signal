@@ -9,6 +9,9 @@ A live dashboard runs all controllers **side by side on identical traffic**
 (same network, same demand, same random seed) and streams the result to the
 browser, so the difference is something you can watch, not just a table.
 
+**Live demo:** https://smart-signal-i0v5.onrender.com (free instance — spins
+down when idle, first load can take ~30s to wake up)
+
 ## Why this design
 
 - **Next-phase actions, not durations.** Every 5 s the agent picks which green
