@@ -34,5 +34,5 @@ desktop.ini
 
 # Local AI tooling (installed skills, agent caches)
 .agents/
-.claude/skills/
+.claude/
 skills-lock.json
